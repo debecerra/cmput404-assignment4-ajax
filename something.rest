@@ -1,0 +1,17 @@
+### Get entity
+GET http://127.0.0.1:5000/entity/b
+
+### Update entity
+POST http://127.0.0.1:5000/entity/c
+Content-Type: "application/json"
+
+{
+    "x": 3, 
+    "y": 3
+}
+
+### Get world
+GET http://127.0.0.1:5000/world
+
+###
+GET http://127.0.0.1:5000/clear
