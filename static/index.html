@@ -6,7 +6,7 @@
     <meta content='width=device-width; height=device-height; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;' name='viewport' />
     <meta name="viewport" content="width=device-width" />
     <meta name="license" content="
-        Copyright 2013 Abram Hindle
+        Copyright 2013 Abram Hindle, 2021 Diego Becerra
         
         Licensed under the Apache License, Version 2.0 (the "License");
         you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ function sendJSONXMLHTTPRequest(url, objects, callback) {
                 if (xhr.status==200) {
                     //XXX: parse some JSON from the request!
                     //XXX: Pass the data to the callback!
+                    callback(JSON.parse(xhr.response))
                 }
             } 
             catch(e) {
@@ -47,9 +48,18 @@ function sendJSONXMLHTTPRequest(url, objects, callback) {
             }
         }
     };
+    // MDN WebDocs, "XMLHttpRequest", https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest
+    // 2021-09-14, CC BY-SA 2.5
+
     //XXX: POST to a URL
+    xhr.open("POST", url);
+
     //XXX: set the mimetype and the accept headers!
     // Remember to use application/json !
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.setRequestHeader("Accept", "*/*");
+    
+    xhr.send(JSON.stringify(objects));
 }
 
 
@@ -138,6 +148,9 @@ function addEntity(entity, data) {
     world[entity] = data;
     drawNextFrame(); // (but should we?)
     //XXX: Send a XHTML Request that updates the entity you just  modified!
+    sendJSONXMLHTTPRequest(`http://127.0.0.1:5000/entity/${entity}`, data, (response) => {
+        world[entity] = response
+    });
 
 }
 
@@ -262,6 +275,25 @@ mouse.mousedraggers.push(function(x,y,clicked,e) {
 
 function update() {
     //XXX: TODO Get the world from the webservice using a XMLHTTPRequest
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState==4) {
+            try {
+                if (xhr.status==200) {
+                    world = {...JSON.parse(xhr.response)}
+                    drawNextFrame()
+                }
+            } 
+            catch(e) {
+                alert('Error: ' + e.name);
+            }
+        }
+    };
+
+    xhr.open("GET", "http://127.0.0.1:5000/world");
+    xhr.setRequestHeader("Accept", "*/*");
+    xhr.send();
+
     drawFrame();
 }
 
