@@ -21,6 +21,7 @@
         limitations under the License.
     "/>
     <script src="json2.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.10/lodash.min.js"></script>
   </head> 
   <body bgcolor="black" height="100%" width="100%"> 
     <canvas id="c" width="100%" height="100%" style="-webkit-tap-highlight-color: transparent;"></canvas> 
@@ -31,6 +32,13 @@ var context = canvas.getContext("2d");
 var W = canvas.width  = window.innerWidth-6;
 var H = canvas.height = window.innerHeight-50;
 
+// Simon Borksy, https://stackoverflow.com/users/967120/simon-borsky, Create an array with random values, 
+// 2017-03-27, https://stackoverflow.com/a/43044960, CC BY-SA 3.0
+stars = Array.from({length: 40}, () => {
+    return {
+        x: Math.floor(Math.random() * W),
+        y: Math.floor(Math.random() * H)
+    }});
 
 function sendJSONXMLHTTPRequest(url, objects, callback) {
     var xhr = new XMLHttpRequest();
@@ -57,7 +65,7 @@ function sendJSONXMLHTTPRequest(url, objects, callback) {
     //XXX: set the mimetype and the accept headers!
     // Remember to use application/json !
     xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.setRequestHeader("Accept", "*/*");
+    xhr.setRequestHeader("Accept", "application/json");
     
     xhr.send(JSON.stringify(objects));
 }
@@ -67,17 +75,43 @@ world = {};
 
 //XXX: TODO Make this prettier!
 function drawCircle(context,entity) {
-    with(context) {
-        beginPath();              
-        lineWidth = 3;
-        var x = entity["x"];
-        var y = entity["y"];
-        //moveTo(x,y);
-        fillStyle = entity["colour"];
-        strokeStyle = fillStyle;
-        arc(x, y, (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);  
-        stroke();                                
+    // Not a circle any more!
+    let x = entity["x"];
+    let y = entity["y"];
+    let radius = entity["radius"] ? entity["radius"] : 50
+    let fillStyle = entity["colour"];
+
+    drawStarHelper(x,y,10,radius,Math.floor(radius*0.6), fillStyle);
+}
+
+// markE, https://stackoverflow.com/users/411591/marke, How to draw a star by using canvas HTML5?, 
+// 2014-09-15, https://stackoverflow.com/a/25840319, CC BY-SA 3.0
+function drawStarHelper(cx,cy,spikes,outerRadius,innerRadius, colour){
+    var rot=Math.PI/2*3;
+    var x=cx;
+    var y=cy;
+    var step=Math.PI/spikes;
+
+    context.beginPath();
+    context.moveTo(cx,cy-outerRadius)
+    for(i=0;i<spikes;i++){
+        x=cx+Math.cos(rot)*outerRadius;
+        y=cy+Math.sin(rot)*outerRadius;
+        context.lineTo(x,y)
+        rot+=step
+
+        x=cx+Math.cos(rot)*innerRadius;
+        y=cy+Math.sin(rot)*innerRadius;
+        context.lineTo(x,y)
+        rot+=step
     }
+    context.lineTo(cx,cy-outerRadius);
+    context.closePath();
+    context.lineWidth=5;
+    context.strokeStyle= colour ? colour : 'blue';
+    context.stroke();
+    context.fillStyle='#DAA520';
+    context.fill();
 }
 
 function prepEntity(entity) {
@@ -85,16 +119,19 @@ function prepEntity(entity) {
         entity["colour"] = "#FF0000";
     }
     if (!entity["radius"]) {
-        entity["radius"] = 50;
+        entity["radius"] = 60;
     }
     return entity;
 }
 
 function clearFrame() {
     with(context) {
-	moveTo(0,0);
-	fillStyle = "#000";
-	fillRect(0,0,W,H);
+        moveTo(0,0);
+        fillStyle = "#111";
+        fillRect(0,0,W,H);
+        
+        fillStyle = "#fff";
+        stars.forEach((pos) => fillRect(pos['x'], pos['y'], 2, 2))
     }
 
 }
@@ -148,9 +185,11 @@ function addEntity(entity, data) {
     world[entity] = data;
     drawNextFrame(); // (but should we?)
     //XXX: Send a XHTML Request that updates the entity you just  modified!
-    sendJSONXMLHTTPRequest(`http://127.0.0.1:5000/entity/${entity}`, data, (response) => {
-        world[entity] = response
-    });
+    sendJSONXMLHTTPRequest(`http://127.0.0.1:5000/entity/${entity}`, data, 
+        (response) => {
+            world[entity] = response
+        }
+    );
 
 }
 
@@ -260,16 +299,16 @@ mouse = (function() {
 // Add the application specific mouse listeners!
 //XXX: TODO Make these prettier!
 mouse.mousedowners.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'blue'});
+    addEntityWithoutName({'x':x,'y':y,'colour':'#00588f'});
 });
 
 mouse.mouseuppers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
+    addEntityWithoutName({'x':x,'y':y,'colour':'#8a0707'});
 });
 
 mouse.mousedraggers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'green',
-                          'radius':10});
+    addEntityWithoutName({'x':x,'y':y,'colour':'#8f007c',
+                          'radius': Math.floor(Math.random()*20)+15});
 });
 
 
@@ -280,8 +319,16 @@ function update() {
         if (xhr.readyState==4) {
             try {
                 if (xhr.status==200) {
-                    world = {...JSON.parse(xhr.response)}
-                    drawNextFrame()
+                    data = JSON.parse(xhr.response)
+                    
+                    // Only render the frame if something changed
+                    // Nicolas, https://stackoverflow.com/users/2200947/nicolas, How to compare two JSON have the same properties without order?, 
+                    // 2014-09-25, https://stackoverflow.com/a/26049421, CC BY-SA 4.0
+                    if (! _.isEqual(data, world)) {
+                        world = {...JSON.parse(xhr.response)}
+                        drawNextFrame()
+                        console.log("Updated!")
+                    }
                 }
             } 
             catch(e) {
@@ -291,7 +338,7 @@ function update() {
     };
 
     xhr.open("GET", "http://127.0.0.1:5000/world");
-    xhr.setRequestHeader("Accept", "*/*");
+    xhr.setRequestHeader("Accept", "application/json");
     xhr.send();
 
     drawFrame();
